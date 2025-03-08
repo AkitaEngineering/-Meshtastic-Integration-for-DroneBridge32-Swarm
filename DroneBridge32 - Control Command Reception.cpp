@@ -1,16 +1,19 @@
 #include <Arduino.h>
 #include <HardwareSerial.h>
-#include <mavlink.h> // Include MAVLink library
+#include <mavlink.h>
+#include <AES.h> // For Decryption
 
 // Configuration
 #define MESHTASTIC_SERIAL Serial1
 #define BAUD_RATE 115200
 #define DRONE_ID 1
-#define MAVLINK_SERIAL Serial // Assuming MAVLink from another serial port
-
-// MAVLink System and Component IDs
+#define MAVLINK_SERIAL Serial
 #define SYSTEM_ID 255
 #define COMPONENT_ID 1
+
+// Encryption
+AES aes;
+uint8_t decryptionKey[] = {0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C}; // Example Key
 
 // Control Command Structure
 struct DroneControlCommand {
@@ -20,20 +23,27 @@ struct DroneControlCommand {
 
 void setup() {
   MESHTASTIC_SERIAL.begin(BAUD_RATE);
-  MAVLINK_SERIAL.begin(57600); // Adjust to your MAVLink baud rate.
+  MAVLINK_SERIAL.begin(57600);
   Serial.begin(115200);
   Serial.println("DroneBridge32 Meshtastic Integration - Control");
+  aes.setKey(decryptionKey, sizeof(decryptionKey));
 }
 
 void loop() {
   receiveControlCommand();
-  delay(50); // Adjust delay as needed.
+  delay(50);
 }
 
 void receiveControlCommand() {
   if (MESHTASTIC_SERIAL.available() >= sizeof(DroneControlCommand)) {
+    uint8_t encrypted_buffer[sizeof(DroneControlCommand)];
+    MESHTASTIC_SERIAL.readBytes(encrypted_buffer, sizeof(DroneControlCommand));
+
+    uint8_t decrypted_buffer[sizeof(DroneControlCommand)];
+    aes.decrypt(encrypted_buffer, decrypted_buffer);
+
     DroneControlCommand command;
-    MESHTASTIC_SERIAL.readBytes((uint8_t*)&command, sizeof(DroneControlCommand));
+    memcpy(&command, decrypted_buffer, sizeof(DroneControlCommand));
 
     if (command.droneID == DRONE_ID) {
       Serial.print("Received command: ");
@@ -45,6 +55,9 @@ void receiveControlCommand() {
       } else if (command.command == 2) {
         sendMavlinkCommand(MAV_CMD_NAV_LAND);
         Serial.println("Sending Land MAVLink command.");
+      } else if (command.command == 3) {
+        sendMavlinkCommand(MAV_CMD_NAV_LAND); // Emergency landing is just a land command for this example.
+        Serial.println("Sending Emergency Land MAVLink command.");
       } else {
         Serial.println("Unknown command.");
       }
@@ -74,27 +87,26 @@ void sendMavlinkCommand(uint16_t command) {
   MAVLINK_SERIAL.write(buf, len);
 }
 
-//Error handling.
-void serialErrorHandler(HardwareSerial* serialPort){
-    if(serialPort->getWriteError()){
-        Serial.println("Serial Write Error!");
-        serialPort->clearWriteError();
-    }
-    if(serialPort->getOverrun()){
-        Serial.println("Serial Overrun Error!");
-        serialPort->clearOverrun();
-    }
-    if(serialPort->getFramingError()){
-        Serial.println("Serial Framing Error!");
-        serialPort->clearFramingError();
-    }
-    if(serialPort->getParityError()){
-        Serial.println("Serial Parity Error!");
-        serialPort->clearParityError();
-    }
+void serialErrorHandler(HardwareSerial* serialPort) {
+  if (serialPort->getWriteError()) {
+    Serial.println("Serial Write Error!");
+    serialPort->clearWriteError();
+  }
+  if (serialPort->getOverrun()) {
+    Serial.println("Serial Overrun Error!");
+    serialPort->clearOverrun();
+  }
+  if (serialPort->getFramingError()) {
+    Serial.println("Serial Framing Error!");
+    serialPort->clearFramingError();
+  }
+  if (serialPort->getParityError()) {
+    Serial.println("Serial Parity Error!");
+    serialPort->clearParityError();
+  }
 }
 
-void loop(){
+void loop() {
   receiveControlCommand();
   serialErrorHandler(&MAVLINK_SERIAL);
   serialErrorHandler(&MESHTASTIC_SERIAL);
