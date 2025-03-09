@@ -63,14 +63,6 @@ This project provides a comprehensive framework for integrating Meshtastic mesh 
 * **Geofence:** Modify the geofence coordinates in the telemetry plugin.
 * **Encryption Key:** Modify the Encryption keys in the arduino code and ensure they match.
 
-## Considerations
-
-* **Latency:** Meshtastic's LoRa communication introduces latency.
-* **Bandwidth:** Optimize data transmission for limited bandwidth.
-* **Power Consumption:** Minimize power usage on drone nodes.
-* **Reliability:** Implement error handling for LoRa communication.
-* **Regulations:** Adhere to local drone operation and radio communication regulations.
-
 ## Disclaimer
 
 This project is provided "as is," without warranty. Use at your own risk.
